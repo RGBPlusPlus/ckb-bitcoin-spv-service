@@ -194,17 +194,21 @@ impl SpvRpc for SpvRpcImpl {
 
         let (target_height, target_hash, raw_tx_out_proof) =
             tokio::task::block_in_place(|| -> RpcResult<(u32, Hash, Vec<u8>)> {
-                let (merkle_block, raw_tx_out_proof) =
-                    spv.btc_cli.get_tx_out_proof(txid).map_err(|err| {
-                        let message =
-                            format!("failed to get tx out proof for {txid:#x} from remote");
-                        log::error!("{message} since {err}");
-                        RpcError {
-                            code: RpcErrorCode::InternalError,
-                            message,
-                            data: None,
-                        }
-                    })?;
+                let req = if let Some(electrs) = &spv.electrs_cli {
+                    electrs.get_tx_out_proof(txid)
+                } else {
+                    spv.btc_cli.get_tx_out_proof(txid)
+                };
+
+                let (merkle_block, raw_tx_out_proof) = req.map_err(|err| {
+                    let message = format!("failed to get tx out proof for {txid:#x} from remote");
+                    log::error!("{message} since {err}");
+                    RpcError {
+                        code: RpcErrorCode::InternalError,
+                        message,
+                        data: None,
+                    }
+                })?;
                 let block_hash = merkle_block.header.block_hash();
                 log::trace!(">>> the input tx in header {block_hash:#x}");
                 let block_height = spv.btc_cli.get_block_height(block_hash).map_err(|err| {
@@ -464,6 +468,7 @@ mod tests {
         let service = SpvService {
             ckb_cli: CkbRpcClient::new(endpoint),
             btc_cli: BitcoinClient::new(endpoint.parse().unwrap(), None, None),
+            electrs_cli: None,
             storage: Storage::new(directory.path()).unwrap(),
             sync_status: Default::default(),
         };

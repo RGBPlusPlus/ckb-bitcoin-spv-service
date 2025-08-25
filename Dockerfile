@@ -1,10 +1,18 @@
 FROM rust:latest AS builder
 
-WORKDIR /app
-COPY . /app
-
 RUN apt-get update && apt-get install --no-install-recommends -y clang
-RUN cargo build --release
+
+WORKDIR /
+RUN cargo new app
+
+# Install dependencies for cache
+WORKDIR /app
+RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
+  --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
+  cargo build --release
+
+COPY . .
+RUN touch src/main.rs; cargo build --release
 
 FROM ubuntu:latest
 
