@@ -58,10 +58,12 @@ impl Args {
         }
         let ckb_cli = self.ckb.client();
         let btc_cli = self.bitcoin.client();
+        let electrs_cli = self.bitcoin.electrs_client();
 
         let spv_service = SpvService {
             ckb_cli: ckb_cli.clone(),
             btc_cli: btc_cli.clone(),
+            electrs_cli: electrs_cli.clone(),
             storage: storage.clone(),
         };
 

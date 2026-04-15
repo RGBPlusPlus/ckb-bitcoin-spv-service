@@ -9,7 +9,7 @@ use ckb_sdk::rpc::CkbRpcClient;
 use ckb_types::prelude::*;
 
 use crate::{
-    components::{BitcoinClient, SpvClientCell, SpvInfoCell, SpvInstance, Storage},
+    components::{ElectrsClient, BitcoinClient, SpvClientCell, SpvInfoCell, SpvInstance, Storage},
     prelude::*,
     result::{Error, Result},
 };
@@ -18,6 +18,7 @@ use crate::{
 pub struct SpvService {
     pub(crate) ckb_cli: CkbRpcClient,
     pub(crate) btc_cli: BitcoinClient,
+    pub(crate) electrs_cli: Option<ElectrsClient>,
     pub(crate) storage: Storage,
 }
 

@@ -10,7 +10,7 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use url::Url;
 
 use crate::{
-    components::BitcoinClient,
+    components::{BitcoinClient, ElectrsClient},
     prelude::*,
     result::{Error, Result},
     utilities::{value_parsers, Key256Bits},
@@ -205,6 +205,9 @@ pub struct BitcoinArgs {
         value_name = "BITCOIN_ENDPOINT_PASSWORD"
     )]
     pub(crate) password: Option<String>,
+
+    #[arg(long = "electrs-endpoint", value_name = "ELECTRS_ENDPOINT")]
+    pub(crate) electrs_endpoint: Option<Url>,
 }
 
 impl Cli {
@@ -329,5 +332,11 @@ impl BitcoinArgs {
             self.username.clone(),
             self.password.clone(),
         )
+    }
+
+    pub fn electrs_client(&self) -> Option<ElectrsClient> {
+        self.electrs_endpoint
+            .as_ref()
+            .map(|endpoint| ElectrsClient::new(endpoint.clone()))
     }
 }

@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use bitcoin::constants::DIFFCHANGE_INTERVAL;
 use ckb_bitcoin_spv_verifier::{
     types::{
-        core::{Hash, Header, HeaderDigest, MmrProof, SpvClient, Target},
+        core::{BitcoinChainType, Hash, Header, HeaderDigest, MmrProof, SpvClient, Target},
         packed,
         prelude::*,
     },
@@ -195,7 +195,14 @@ pub(crate) trait BitcoinSpvStorage: InternalBitcoinSpvStorage {
             let start_height = (tip_height / DIFFCHANGE_INTERVAL) * DIFFCHANGE_INTERVAL;
             let start_header = self.get_bitcoin_header(start_height)?;
             if flag == 0 {
-                let curr_target: Target = tip_header.bits.into();
+                // For Testnet4 (BIP 94): use first block's difficulty as baseline
+                // to prevent block storms from 20-minute exception.
+                // For other chains: use last block's difficulty.
+                let curr_target: Target = if BitcoinChainType::Testnet4 == flags.into() {
+                    start_header.bits.into()
+                } else {
+                    tip_header.bits.into()
+                };
                 log::trace!(
                     "height {tip_height}, time: {}, target {curr_target:#x}",
                     tip_header.time
