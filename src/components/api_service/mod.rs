@@ -2,7 +2,7 @@
 
 use std::{net::SocketAddr, sync::RwLock, time::SystemTime};
 
-use bitcoin::Txid;
+use bitcoin::{MerkleBlock, Txid};
 use ckb_bitcoin_spv_verifier::types::{
     core::{Bytes, Hash},
     packed,
@@ -178,6 +178,37 @@ impl SpvRpcImpl {
     }
 }
 
+// Bitcoin Core was asked to prove a single transaction. Its partial Merkle tree
+// gives us both the transaction ID and its zero-based position in the block.
+fn proof_transaction_index(merkle_block: &MerkleBlock, txid: Txid) -> RpcResult<u32> {
+    let mut matches = Vec::new();
+    let mut indexes = Vec::new();
+    let invalid_proof = || RpcError {
+        code: RpcErrorCode::InternalError,
+        message: "Bitcoin Core returned an invalid transaction proof".to_owned(),
+        data: None,
+    };
+    merkle_block
+        .extract_matches(&mut matches, &mut indexes)
+        .map_err(|err| {
+            log::error!("invalid transaction proof from Bitcoin Core for {txid:#x}: {err}");
+            invalid_proof()
+        })?;
+    match (matches.as_slice(), indexes.as_slice()) {
+        ([matched_txid], [index]) if *matched_txid == txid => Ok(*index),
+        _ => Err(invalid_proof()),
+    }
+}
+
+fn check_requested_tx_index(requested: u32, actual: u32) -> RpcResult<()> {
+    if requested == actual {
+        return Ok(());
+    }
+    Err(RpcError::invalid_params(
+        "tx_index does not match the transaction's position in the block",
+    ))
+}
+
 impl SpvRpc for SpvRpcImpl {
     fn get_sync_status(&self) -> RpcResult<SyncStatus> {
         Ok(self.spv_service.sync_status.snapshot())
@@ -192,8 +223,8 @@ impl SpvRpc for SpvRpcImpl {
         log::debug!("Call getTxProof with params [{txid:#x}, {confirmations}]");
         let spv = &self.spv_service;
 
-        let (target_height, target_hash, raw_tx_out_proof) =
-            tokio::task::block_in_place(|| -> RpcResult<(u32, Hash, Vec<u8>)> {
+        let (target_height, target_hash, raw_tx_out_proof, actual_tx_index) =
+            tokio::task::block_in_place(|| -> RpcResult<(u32, Hash, Vec<u8>, u32)> {
                 let (merkle_block, raw_tx_out_proof) =
                     spv.btc_cli.get_tx_out_proof(txid).map_err(|err| {
                         let message =
@@ -205,6 +236,8 @@ impl SpvRpc for SpvRpcImpl {
                             data: None,
                         }
                     })?;
+                let actual_tx_index = proof_transaction_index(&merkle_block, txid)?;
+                check_requested_tx_index(tx_index, actual_tx_index)?;
                 let block_hash = merkle_block.header.block_hash();
                 log::trace!(">>> the input tx in header {block_hash:#x}");
                 let block_height = spv.btc_cli.get_block_height(block_hash).map_err(|err| {
@@ -218,7 +251,12 @@ impl SpvRpc for SpvRpcImpl {
                     }
                 })?;
                 log::trace!(">>> the input tx in header {block_height}");
-                Ok((block_height, block_hash.into(), raw_tx_out_proof))
+                Ok((
+                    block_height,
+                    block_hash.into(),
+                    raw_tx_out_proof,
+                    actual_tx_index,
+                ))
             })?;
 
         let (stg_tip_height, _) = spv.storage.tip_state().map_err(|err| {
@@ -434,7 +472,7 @@ impl SpvRpc for SpvRpcImpl {
             })?;
 
         let tx_proof: Bytes = packed::TransactionProof::new_builder()
-            .tx_index(tx_index.pack())
+            .tx_index(actual_tx_index.pack())
             .height(target_height.pack())
             .transaction_proof(Bytes::from(raw_tx_out_proof).pack())
             .header_proof(header_proof.pack())
@@ -456,6 +494,43 @@ mod tests {
 
     use super::*;
     use crate::components::{BitcoinClient, Storage};
+
+    #[test]
+    fn transaction_index_matches_bitcoin_merkle_proof() {
+        let block = bitcoin::blockdata::constants::genesis_block(bitcoin::Network::Testnet);
+        let txid = block.txdata[0].txid();
+        let proof = MerkleBlock::from_block_with_predicate(&block, |id| *id == txid);
+
+        let index = proof_transaction_index(&proof, txid).unwrap();
+        assert_eq!(index, 0);
+        assert!(check_requested_tx_index(0, index).is_ok());
+    }
+
+    #[test]
+    fn transaction_index_matches_nonzero_position_in_real_block() {
+        // Bitcoin mainnet block 831332, zero-based transaction index 15.
+        // Fixture: ckb-cell/ckb-bitcoin-spv-testdata at df333093,
+        // main-chain/txoutproof/case-0831332/0831332-15.bin.
+        let proof: MerkleBlock =
+            bitcoin::consensus::deserialize(include_bytes!("testdata/block-831332-tx-15.bin"))
+                .unwrap();
+        let txid = "9f8e17583c13cb72176ce1fd7708d852f2c379b736f44eafb6a606736e4d9602"
+            .parse()
+            .unwrap();
+
+        let index = proof_transaction_index(&proof, txid).unwrap();
+        assert_eq!(index, 15);
+        assert!(check_requested_tx_index(15, index).is_ok());
+    }
+
+    #[test]
+    fn requested_index_must_equal_the_transaction_position() {
+        assert!(check_requested_tx_index(5, 5).is_ok());
+        for requested in [4, 6, u32::MAX] {
+            let err = check_requested_tx_index(requested, 5).unwrap_err();
+            assert_eq!(err.code, RpcErrorCode::InvalidParams);
+        }
+    }
 
     #[test]
     fn sync_status_reads_only_the_shared_observations() {

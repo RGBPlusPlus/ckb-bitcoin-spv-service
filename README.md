@@ -75,7 +75,8 @@ With the command line option `-h`(alias of `--help`), help will be printed.
 
     The index of a transaction in the block; starts from 0.
 
-    **Service doesn't check it, just pack it into the final proof.**
+    The service checks it against the transaction's position in the Bitcoin Core
+    proof and returns JSON-RPC `Invalid params` if it does not match.
 
   - `confirmations` (an unsigned integer)
 
