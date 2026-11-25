@@ -229,20 +229,17 @@ impl SpvInstance {
         Err(Error::other(msg))
     }
 
-    pub(crate) fn find_spv_client_before_tip(&self, count: usize) -> Result<SpvClientCell> {
-        let SpvInstance { ref info, clients } = self;
-        let mut info = info.to_owned();
-        for _ in 0..count {
-            info.info.tip_client_id = info.prev_tip_client_id()
+    /// All SPV clients, from the tip client to the oldest one.
+    pub(crate) fn clients_from_tip(&self) -> Vec<SpvClientCell> {
+        let mut info = self.info.to_owned();
+        let mut cells = Vec::with_capacity(self.clients.len());
+        for _ in 0..self.clients.len() {
+            if let Some(cell) = self.clients.get(&info.info.tip_client_id) {
+                cells.push(cell.to_owned());
+            }
+            info.info.tip_client_id = info.prev_tip_client_id();
         }
-        let cell = clients.get(&info.info.tip_client_id).ok_or_else(|| {
-            let msg = format!(
-                "the SPV client (id={}) is not found",
-                info.info.tip_client_id
-            );
-            Error::other(msg)
-        })?;
-        Ok(cell.clone())
+        cells
     }
 }
 

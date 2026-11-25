@@ -39,8 +39,8 @@ ckb-hash          = "0.115.0-rc2"
 
 [dependencies.ckb-bitcoin-spv-verifier]
 version = "0.1.0"
-git = "https://github.com/RGBPlusPlus/ckb-bitcoin-spv"
-rev = "3f7a0ddf947b35c60ce6c63b7fef2005cb12d0af"
+git = "https://github.com/fghdotio/ckb-bitcoin-spv"
+rev = "5904f3de9759156e0f62b44ad7c5b9a870263599"
 
 [dev-dependencies]
 tempfile = "3.10"

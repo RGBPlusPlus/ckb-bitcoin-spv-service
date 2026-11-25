@@ -275,3 +275,53 @@ fn rollback_and_replace_branch_matches_fresh_storage() {
         Err(VerifyTxError::HeaderMmrProof as i8)
     );
 }
+
+#[test]
+fn testnet4_retarget() {
+    use std::num::NonZeroU32;
+
+    use bitcoin::{blockdata::constants::DIFFCHANGE_INTERVAL, CompactTarget};
+    use ckb_bitcoin_spv_verifier::constants::{FLAG_CHAIN_TYPE_TESTNET, FLAG_CHAIN_TYPE_TESTNET4};
+
+    // A whole difficulty period whose first block carries the real difficulty
+    // and whose last block is a 20-minute minimum-difficulty block. The period
+    // lasts exactly two weeks, so the retarget keeps the base difficulty.
+    const PERIOD_BITS: u32 = 0x1905_2250;
+    const MIN_DIFFICULTY_BITS: u32 = 0x1d00_ffff;
+    const TWO_WEEKS: u32 = 14 * 24 * 60 * 60;
+
+    let mut headers = linked_blocks(DIFFCHANGE_INTERVAL as usize, 0)
+        .into_iter()
+        .map(|block| block.header)
+        .collect::<Vec<_>>();
+    let start_time = headers[0].time;
+    headers[0].bits = CompactTarget::from_consensus(PERIOD_BITS);
+    for index in 1..headers.len() {
+        headers[index].prev_blockhash = headers[index - 1].block_hash();
+        if index == headers.len() - 1 {
+            headers[index].bits = CompactTarget::from_consensus(MIN_DIFFICULTY_BITS);
+            headers[index].time = start_time + TWO_WEEKS;
+        }
+    }
+
+    let next_bits = |flags: u8| {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = Storage::new(directory.path()).unwrap();
+        storage.initialize_with(0, headers[0]).unwrap();
+        storage.append_headers(headers[1..].to_vec()).unwrap();
+        let (client, update) = storage
+            .generate_spv_client_and_spv_update(0, NonZeroU32::MAX, flags)
+            .unwrap();
+        assert_eq!(client.headers_mmr_root.max_height, DIFFCHANGE_INTERVAL - 1);
+        assert_eq!(update.headers().len(), headers.len() - 1);
+        let (time, bits) = client.target_adjust_info.decode().unwrap();
+        assert_eq!(time, start_time);
+        bits.to_consensus()
+    };
+
+    // BIP-94: Testnet4 retargets from the first block, ignoring the
+    // minimum-difficulty exception at the end of the period.
+    assert_eq!(next_bits(FLAG_CHAIN_TYPE_TESTNET4), PERIOD_BITS);
+    // Testnet3 retargets from the last block, so the exception leaks through.
+    assert_eq!(next_bits(FLAG_CHAIN_TYPE_TESTNET), MIN_DIFFICULTY_BITS);
+}

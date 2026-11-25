@@ -5,6 +5,7 @@ use jsonrpc_core::{Error as RpcError, ErrorCode as RpcErrorCode};
 #[repr(i64)]
 pub enum ApiErrorCode {
     // Bitcoin: 21xxx
+    BitcoinTxOutProofInvalid = 21101,
     // Storage: 23xxx
     StorageTxTooNew = 23101,
     StorageTxUnconfirmed,
@@ -12,6 +13,7 @@ pub enum ApiErrorCode {
     StorageHeaderUnmatched,
     // Onchain: 25xxx
     OnchainTxUnconfirmed = 25101,
+    OnchainClientSpent,
     OnchainReorgRequired = 25901,
 }
 

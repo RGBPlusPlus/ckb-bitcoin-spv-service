@@ -75,7 +75,11 @@ With the command line option `-h`(alias of `--help`), help will be printed.
 
     The index of a transaction in the block; starts from 0.
 
-    **Service doesn't check it, just pack it into the final proof.**
+    The service verifies the final proof before returning it. If the tx out
+    proof from the Bitcoin node or Electrs cannot be decoded, is invalid, or
+    does not contain the transaction, error code `21101` is returned. Once
+    the block is known to be on the local chain, a `tx-index` which is not the
+    transaction's index in the block is rejected with an `InvalidParams` error.
 
   - `confirmations` (an unsigned integer)
 
@@ -85,7 +89,9 @@ With the command line option `-h`(alias of `--help`), help will be printed.
 
   - `spv_client` ([type: `OutPoint`])
 
-    An out point of a SPV client cell in CKB.
+    An out point of a SPV client cell in CKB. If the cell has been spent and
+    the CKB Indexer has not caught up, error code `25102` is returned; retry
+    later.
 
   - `proof` ([type: `JsonBytes`])
 

@@ -46,6 +46,8 @@ pub enum BtcRpcError {
     Http(#[from] reqwest::Error),
     #[error("jsonrpc error: {0}")]
     Rpc(#[from] jsonrpc_core::Error),
+    #[error("invalid tx out proof: {0}")]
+    TxOutProof(String),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

@@ -5,7 +5,7 @@ use std::{net::SocketAddr, path::PathBuf, thread, time};
 use clap::Parser;
 
 use crate::{
-    components::{ApiServiceConfig, SpvService, Storage},
+    components::{ApiServiceConfig, SpvService, Storage, StorageSync},
     prelude::*,
     result::{Error, Result},
     utilities::try_raise_fd_limit,
@@ -71,7 +71,9 @@ impl Args {
         let _api_service = ApiServiceConfig::new(self.listen_address).start(spv_service.clone());
 
         loop {
-            if !spv_service.sync_storage(self.bitcoin_headers_download_batch_size)? {
+            if spv_service.sync_storage(self.bitcoin_headers_download_batch_size)?
+                == StorageSync::Interrupted
+            {
                 continue;
             }
             self.take_a_break();

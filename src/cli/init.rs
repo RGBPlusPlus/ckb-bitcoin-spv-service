@@ -4,7 +4,10 @@ use std::{collections::HashMap, path::PathBuf};
 
 use bitcoin::blockdata::constants::DIFFCHANGE_INTERVAL;
 use ckb_bitcoin_spv_verifier::{
-    constants::{FLAG_CHAIN_TYPE_MAINNET, FLAG_CHAIN_TYPE_SIGNET, FLAG_CHAIN_TYPE_TESTNET},
+    constants::{
+        FLAG_CHAIN_TYPE_MAINNET, FLAG_CHAIN_TYPE_SIGNET, FLAG_CHAIN_TYPE_TESTNET,
+        FLAG_CHAIN_TYPE_TESTNET4,
+    },
     types::{core::Hash as BitcoinHash, packed, prelude::Pack as VPack},
 };
 use ckb_jsonrpc_types::TransactionView;
@@ -104,6 +107,7 @@ pub enum BitcoinChainType {
     Mainnet,
     Testnet,
     Signet,
+    Testnet4,
 }
 
 impl Args {
@@ -188,6 +192,7 @@ impl Args {
             match self.bitcoin_chain_type {
                 BitcoinChainType::Mainnet => flags |= FLAG_CHAIN_TYPE_MAINNET,
                 BitcoinChainType::Testnet => flags |= FLAG_CHAIN_TYPE_TESTNET,
+                BitcoinChainType::Testnet4 => flags |= FLAG_CHAIN_TYPE_TESTNET4,
                 BitcoinChainType::Signet => flags |= FLAG_CHAIN_TYPE_SIGNET,
             }
             let args = packed::SpvTypeArgs::new_builder()
